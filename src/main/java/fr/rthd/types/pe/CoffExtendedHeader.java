@@ -8,6 +8,7 @@ import lombok.Value;
 @Value
 @ToString
 public class CoffExtendedHeader {
+	@ToString.Exclude
 	CoffHeader coffHeader;
 	/**
 	 * PE32 or PE32+

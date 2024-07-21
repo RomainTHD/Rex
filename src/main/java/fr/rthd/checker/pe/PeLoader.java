@@ -8,9 +8,13 @@ import fr.rthd.common.Logger;
 import fr.rthd.types.pe.CoffCharacteristicsFlags;
 import fr.rthd.types.pe.CoffExtendedHeader;
 import fr.rthd.types.pe.CoffHeader;
+import fr.rthd.types.pe.DataDirectory;
+import fr.rthd.types.pe.DataDirectoryFieldName;
 import fr.rthd.types.pe.MachineType;
+import fr.rthd.types.pe.PeHeader;
 import fr.rthd.types.pe.WindowsSubsystem;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -31,10 +35,9 @@ public class PeLoader implements Loader {
 		checkDosHeader();
 		checkDosStub();
 		var coffHeader = checkCoffHeader();
-		checkOptCoffHeader(coffHeader);
-		checkNtHeaders();
+		var coffExtendedHeader = checkOptCoffHeader(coffHeader);
+		var peHeader = checkDataDirectories(coffExtendedHeader);
 		checkSectionTable();
-		checkSections();
 	}
 
 	private void checkDosHeader() {
@@ -122,6 +125,7 @@ public class PeLoader implements Loader {
 
 		var extHeader = CoffExtendedHeader
 			.builder()
+			// COFF fields
 			.coffHeader(coffHeader)
 			.is64bitAddressSpace(false)
 			.linkerVersion(nextU16())
@@ -131,6 +135,7 @@ public class PeLoader implements Loader {
 			.entryPointAddr(nextU32())
 			.textBase(nextU32())
 			.dataBase(nextU32())
+			// Windows specific fields
 			.imageBase(nextU32())
 			.sectionAlignment(nextU32())
 			.fileAlignment(nextU32())
@@ -157,31 +162,57 @@ public class PeLoader implements Loader {
 		return extHeader;
 	}
 
-	private void checkNtHeaders() {
+	private PeHeader checkDataDirectories(CoffExtendedHeader coffHeader) {
+		if (coffHeader.getRvaCount() > DataDirectoryFieldName.values().length) {
+			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Too many data directories");
+		}
 
+		LinkedHashMap<DataDirectoryFieldName, DataDirectory> dataDirs = new LinkedHashMap<>();
+
+		for (int i = 0; i < coffHeader.getRvaCount(); ++i) {
+			var addr = nextU32();
+			var size = nextU32();
+			if (addr != 0 || size != 0) {
+				var fieldName = DataDirectoryFieldName.values()[i];
+				dataDirs.put(
+					fieldName,
+					DataDirectory
+						.builder()
+						.fieldName(fieldName)
+						.addr(addr)
+						.size(size)
+						.build()
+				);
+			}
+		}
+
+		var header = PeHeader
+			.builder()
+			.coffExtendedHeader(coffHeader)
+			.dataDirectories(dataDirs)
+			.build();
+		logger.debug(header.toString());
+		return header;
 	}
 
 	private void checkSectionTable() {
 	}
 
-	private void checkSections() {
-	}
-
 	private int nextU8() {
 		var v = reader.nextU8();
-		logger.debug(String.format("0x%1$02X", v));
+		logger.debug(String.format("Reading 0x%1$02X", v));
 		return v;
 	}
 
 	private int nextU16() {
 		var v = reader.nextU16();
-		logger.debug(String.format("0x%1$04X", v));
+		logger.debug(String.format("Reading 0x%1$04X", v));
 		return v;
 	}
 
 	private long nextU32() {
 		var v = reader.nextU32();
-		logger.debug(String.format("0x%1$08X", v));
+		logger.debug(String.format("Reading 0x%1$08X", v));
 		return v;
 	}
 }
