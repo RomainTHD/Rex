@@ -24,9 +24,9 @@ public class BinaryReader {
 
 			return res;
 		} catch (FileNotFoundException e) {
-			throw FailureManager.fail(ExitCode.FileNotFound, e);
+			throw FailureManager.fail(BinaryReader.class, ExitCode.FileNotFound, e);
 		} catch (IOException e) {
-			throw FailureManager.fail(ExitCode.UnknownException, e);
+			throw FailureManager.fail(BinaryReader.class, ExitCode.UnknownException, e);
 		}
 	}
 }

@@ -21,6 +21,7 @@ public class Logger {
 
 	public void warn(String msg) {
 		System.err.println("[W] " + msg);
+		System.err.println("\t@" + _className);
 	}
 
 	public void error(String msg) {

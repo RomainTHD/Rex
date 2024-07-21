@@ -1,4 +1,4 @@
-package fr.rthd.common;
+package fr.rthd.types;
 
 public enum ExecutableFormat {
 	PE,

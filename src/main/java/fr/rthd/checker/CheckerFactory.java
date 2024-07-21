@@ -1,6 +1,6 @@
 package fr.rthd.checker;
 
-import fr.rthd.common.ExecutableFormat;
+import fr.rthd.types.ExecutableFormat;
 import fr.rthd.checker.pe.PeChecker;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
@@ -13,7 +13,7 @@ public class CheckerFactory {
 		return switch (format) {
 			case PE -> new PeChecker(bytes);
 			case ELF -> throw new NotImplementedException();
-			default -> throw FailureManager.fail(ExitCode.InvalidState);
+			default -> throw FailureManager.fail(CheckerFactory.class, ExitCode.InvalidState);
 		};
 	}
 }
