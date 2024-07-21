@@ -1,19 +1,19 @@
 package fr.rthd.checker;
 
 import fr.rthd.types.ExecutableFormat;
-import fr.rthd.checker.pe.PeChecker;
+import fr.rthd.checker.pe.PeLoader;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.NotImplementedException;
 
 import java.util.List;
 
-public class CheckerFactory {
-	public static Checker getInstance(ExecutableFormat format, List<Byte> bytes) {
+public class LoaderFactory {
+	public static Loader getInstance(ExecutableFormat format, List<Byte> bytes) {
 		return switch (format) {
-			case PE -> new PeChecker(bytes);
+			case PE -> new PeLoader(bytes);
 			case ELF -> throw new NotImplementedException();
-			default -> throw FailureManager.fail(CheckerFactory.class, ExitCode.InvalidState);
+			default -> throw FailureManager.fail(LoaderFactory.class, ExitCode.InvalidState);
 		};
 	}
 }

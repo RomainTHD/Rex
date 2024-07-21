@@ -1,6 +1,7 @@
 package fr.rthd.checker.pe;
 
-import fr.rthd.checker.LittleEndianChecker;
+import fr.rthd.checker.LittleEndianReader;
+import fr.rthd.checker.Loader;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
@@ -16,15 +17,17 @@ import java.util.List;
  * Portable Executable format
  * FIXME: Currently only supports x86
  */
-public class PeChecker extends LittleEndianChecker {
-	private static final Logger logger = new Logger(PeChecker.class);
+public class PeLoader implements Loader {
+	private static final Logger logger = new Logger(PeLoader.class);
 
-	public PeChecker(List<Byte> bytes) {
-		super(bytes);
+	private final LittleEndianReader reader;
+
+	public PeLoader(List<Byte> bytes) {
+		this.reader = new LittleEndianReader(bytes);
 	}
 
 	@Override
-	public void check() {
+	public void load() {
 		checkDosHeader();
 		checkDosStub();
 		var coffHeader = checkCoffHeader();
@@ -37,15 +40,15 @@ public class PeChecker extends LittleEndianChecker {
 	private void checkDosHeader() {
 		if (nextU16() != 0x5a4d) {
 			throw FailureManager.fail(
-				PeChecker.class,
+				PeLoader.class,
 				ExitCode.InvalidFile,
 				"Not a DOS executable: magic number not found"
 			);
 		}
 
-		skipAt(0x3c);
+		reader.skipAt(0x3c);
 		var peHeaderStart = nextU32();
-		skipAt(peHeaderStart);
+		reader.skipAt(peHeaderStart);
 	}
 
 	private void checkDosStub() {
@@ -54,7 +57,7 @@ public class PeChecker extends LittleEndianChecker {
 
 	private CoffHeader checkCoffHeader() {
 		if (nextU32() != 0x4550) {
-			throw FailureManager.fail(PeChecker.class, ExitCode.InvalidFile, "Not a PE image: magic number not found");
+			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Not a PE image: magic number not found");
 		}
 
 		var coffHeader = CoffHeader
@@ -70,20 +73,20 @@ public class PeChecker extends LittleEndianChecker {
 		logger.debug(coffHeader.toString());
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.ExecutableImage)) {
-			throw FailureManager.fail(PeChecker.class, ExitCode.InvalidFile, "File is not executable");
+			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "File is not executable");
 		}
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.Machine32Bit)) {
 			// FIXME: is it really 16 bits exe?
 			throw FailureManager.fail(
-				PeChecker.class,
+				PeLoader.class,
 				ExitCode.Unsupported,
 				"16 bits executables are not supported"
 			);
 		}
 
 		if (coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.DLL)) {
-			throw FailureManager.fail(PeChecker.class, ExitCode.Unsupported, "DLLs are not supported yet");
+			throw FailureManager.fail(PeLoader.class, ExitCode.Unsupported, "DLLs are not supported yet");
 		}
 
 		return coffHeader;
@@ -94,7 +97,7 @@ public class PeChecker extends LittleEndianChecker {
 
 		if (coffHeader.getOptHeaderSize() == 0) {
 			throw FailureManager.fail(
-				PeChecker.class,
+				PeLoader.class,
 				ExitCode.Unsupported,
 				"Optional COFF header is currently required"
 			);
@@ -105,13 +108,13 @@ public class PeChecker extends LittleEndianChecker {
 			// OK, PE32
 		} else if (format == 0x20b) {
 			throw FailureManager.fail(
-				PeChecker.class,
+				PeLoader.class,
 				ExitCode.Unsupported,
 				"64 bit address space is not supported yet"
 			);
 		} else {
 			throw FailureManager.fail(
-				PeChecker.class,
+				PeLoader.class,
 				ExitCode.InvalidFile,
 				"Incorrect optional COFF header magic number"
 			);
@@ -162,5 +165,23 @@ public class PeChecker extends LittleEndianChecker {
 	}
 
 	private void checkSections() {
+	}
+
+	private int nextU8() {
+		var v = reader.nextU8();
+		logger.debug(String.format("0x%1$02X", v));
+		return v;
+	}
+
+	private int nextU16() {
+		var v = reader.nextU16();
+		logger.debug(String.format("0x%1$04X", v));
+		return v;
+	}
+
+	private long nextU32() {
+		var v = reader.nextU32();
+		logger.debug(String.format("0x%1$08X", v));
+		return v;
 	}
 }
