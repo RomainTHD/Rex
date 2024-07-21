@@ -5,8 +5,10 @@ import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
 import fr.rthd.types.pe.CoffCharacteristicsFlags;
+import fr.rthd.types.pe.CoffExtendedHeader;
 import fr.rthd.types.pe.CoffHeader;
 import fr.rthd.types.pe.MachineType;
+import fr.rthd.types.pe.WindowsSubsystem;
 
 import java.util.List;
 
@@ -26,6 +28,7 @@ public class PeChecker extends LittleEndianChecker {
 		checkDosHeader();
 		checkDosStub();
 		var coffHeader = checkCoffHeader();
+		checkOptCoffHeader(coffHeader);
 		checkNtHeaders();
 		checkSectionTable();
 		checkSections();
@@ -84,6 +87,71 @@ public class PeChecker extends LittleEndianChecker {
 		}
 
 		return coffHeader;
+	}
+
+	private CoffExtendedHeader checkOptCoffHeader(CoffHeader coffHeader) {
+		// TODO: Make sure the header size is correct and doesn't overwrite data
+
+		if (coffHeader.getOptHeaderSize() == 0) {
+			throw FailureManager.fail(
+				PeChecker.class,
+				ExitCode.Unsupported,
+				"Optional COFF header is currently required"
+			);
+		}
+
+		var format = nextU16();
+		if (format == 0x10b) {
+			// OK, PE32
+		} else if (format == 0x20b) {
+			throw FailureManager.fail(
+				PeChecker.class,
+				ExitCode.Unsupported,
+				"64 bit address space is not supported yet"
+			);
+		} else {
+			throw FailureManager.fail(
+				PeChecker.class,
+				ExitCode.InvalidFile,
+				"Incorrect optional COFF header magic number"
+			);
+		}
+
+		var extHeader = CoffExtendedHeader
+			.builder()
+			.coffHeader(coffHeader)
+			.is64bitAddressSpace(false)
+			.linkerVersion(nextU16())
+			.textSize(nextU32())
+			.dataSize(nextU32())
+			.bssSize(nextU32())
+			.entryPointAddr(nextU32())
+			.textBase(nextU32())
+			.dataBase(nextU32())
+			.imageBase(nextU32())
+			.sectionAlignment(nextU32())
+			.fileAlignment(nextU32())
+			.osVersion(nextU32())
+			.imageVersion(nextU32())
+			.subsystemVersion(nextU32())
+			.win32VersionValue(nextU32())
+			.imageSize(nextU32())
+			.headersSize(nextU32())
+			.checkSum(nextU32())
+			.subsystem(WindowsSubsystem.fromValue(nextU16()))
+			.dllCharacteristics(nextU16())
+			.stackSizeToReserve(nextU32())
+			.stackSizeToCommit(nextU32())
+			.heapSizeToReserve(nextU32())
+			.heapSizeToCommit(nextU32())
+			.loaderFlags(nextU32())
+			.rvaCount(nextU32())
+			.build();
+		logger.debug(extHeader.toString());
+
+		// TODO: do all kind of checks
+
+		return extHeader;
 	}
 
 	private void checkNtHeaders() {
