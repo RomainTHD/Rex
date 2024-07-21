@@ -62,15 +62,15 @@ public class PeChecker extends LittleEndianChecker {
 			.symbolTablePtr(nextU32())
 			.symbolsCount(nextU32())
 			.optHeaderSize(nextU16())
-			.characteristics(nextU16())
+			.characteristics(CoffCharacteristicsFlags.toFlagSet(nextU16()))
 			.build();
 		logger.debug(coffHeader.toString());
 
-		if ((coffHeader.getCharacteristics() & CoffCharacteristicsFlags.ExecutableImage.getValue()) == 0) {
+		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.ExecutableImage)) {
 			throw FailureManager.fail(PeChecker.class, ExitCode.InvalidFile, "File is not executable");
 		}
 
-		if ((coffHeader.getCharacteristics() & CoffCharacteristicsFlags.Machine32Bit.getValue()) == 0) {
+		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.Machine32Bit)) {
 			// FIXME: is it really 16 bits exe?
 			throw FailureManager.fail(
 				PeChecker.class,
@@ -79,7 +79,7 @@ public class PeChecker extends LittleEndianChecker {
 			);
 		}
 
-		if ((coffHeader.getCharacteristics() & CoffCharacteristicsFlags.DLL.getValue()) != 0) {
+		if (coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.DLL)) {
 			throw FailureManager.fail(PeChecker.class, ExitCode.Unsupported, "DLLs are not supported yet");
 		}
 

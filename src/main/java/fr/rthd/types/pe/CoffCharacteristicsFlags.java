@@ -3,6 +3,10 @@ package fr.rthd.types.pe;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @Getter
 @AllArgsConstructor
 public enum CoffCharacteristicsFlags {
@@ -15,14 +19,17 @@ public enum CoffCharacteristicsFlags {
 	 */
 	ExecutableImage(0x0002),
 	/**
+	 * COFF line numbers have been removed
 	 * @deprecated
 	 */
 	NumsStripped(0x0004),
 	/**
+	 * COFF symbol table entries for local symbols have been removed
 	 * @deprecated
 	 */
 	SymsStripped(0x0008),
 	/**
+	 * Aggressively trim working set
 	 * @deprecated
 	 */
 	AggressiveWsTrim(0x0010),
@@ -31,6 +38,7 @@ public enum CoffCharacteristicsFlags {
 	 */
 	LargeAddressAware(0x0020),
 	/**
+	 * Little endian
 	 * @deprecated
 	 */
 	BytesReversedLo(0x0080),
@@ -63,9 +71,17 @@ public enum CoffCharacteristicsFlags {
 	 */
 	UpSystemOnly(0x4000),
 	/**
+	 * Big endian
 	 * @deprecated
 	 */
 	BytesReversedHi(0x8000);
 
 	private final long value;
+
+	public static Set<CoffCharacteristicsFlags> toFlagSet(long i) {
+		return Arrays
+			.stream(values())
+			.filter((v) -> (v.getValue() & i) != 0)
+			.collect(Collectors.toUnmodifiableSet());
+	}
 }
