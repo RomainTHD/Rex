@@ -16,6 +16,13 @@ public class LittleEndianReader {
 	}
 
 	public int nextU8() {
+		if (idx >= bytes.size()) {
+			throw FailureManager.fail(
+				LittleEndianReader.class,
+				ExitCode.InvalidFile,
+				"Tried to read after end of file"
+			);
+		}
 		return Byte.toUnsignedInt(bytes.get(idx++));
 	}
 

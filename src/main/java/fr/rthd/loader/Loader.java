@@ -9,7 +9,9 @@ import fr.rthd.types.CoffHeader;
 import fr.rthd.types.DataDirectory;
 import fr.rthd.types.DataDirectoryFieldName;
 import fr.rthd.types.MachineType;
+import fr.rthd.types.PeFile;
 import fr.rthd.types.PeHeader;
+import fr.rthd.types.PeSection;
 import fr.rthd.types.PeSectionHeader;
 import fr.rthd.types.SectionCharacteristicsFlags;
 import fr.rthd.types.WindowsSubsystem;
@@ -24,6 +26,7 @@ import java.util.List;
  */
 public class Loader {
 	private static final Logger logger = new Logger(Loader.class);
+	private static final int MAX_SAFE_VIRTUAL_SECTION_SIZE = 100_000;
 
 	private final LittleEndianReader reader;
 
@@ -31,22 +34,19 @@ public class Loader {
 		this.reader = new LittleEndianReader(bytes);
 	}
 
-	public void load() {
+	public PeFile load() {
 		checkDosHeader();
 		checkDosStub();
 		var coffHeader = loadCoffHeader();
 		var coffExtendedHeader = loadOptCoffHeader(coffHeader);
 		var peHeader = loadDataDirectories(coffExtendedHeader);
 		var sections = loadSectionTable(peHeader);
+		return loadSectionContent(peHeader, sections);
 	}
 
 	private void checkDosHeader() {
 		if (nextU16() != 0x5a4d) {
-			throw FailureManager.fail(
-				Loader.class,
-				ExitCode.InvalidFile,
-				"Not a DOS executable: magic number not found"
-			);
+			throw fail(ExitCode.InvalidFile, "Not a DOS executable: magic number not found");
 		}
 
 		reader.skipAt(0x3c);
@@ -60,7 +60,7 @@ public class Loader {
 
 	private CoffHeader loadCoffHeader() {
 		if (nextU32() != 0x4550) {
-			throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "Not a PE image: magic number not found");
+			throw fail(ExitCode.InvalidFile, "Not a PE image: magic number not found");
 		}
 
 		var coffHeader = CoffHeader
@@ -76,20 +76,16 @@ public class Loader {
 		logger.debug(coffHeader.toString());
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.ExecutableImage)) {
-			throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "File is not executable");
+			throw fail(ExitCode.InvalidFile, "File is not executable");
 		}
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.Machine32Bit)) {
 			// FIXME: is it really 16 bits exe?
-			throw FailureManager.fail(
-				Loader.class,
-				ExitCode.Unsupported,
-				"16 bits executables are not supported"
-			);
+			throw fail(ExitCode.Unsupported, "16 bits executables are not supported");
 		}
 
 		if (coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.DLL)) {
-			throw FailureManager.fail(Loader.class, ExitCode.Unsupported, "DLLs are not supported yet");
+			throw fail(ExitCode.Unsupported, "DLLs are not supported yet");
 		}
 
 		return coffHeader;
@@ -99,28 +95,16 @@ public class Loader {
 		// TODO: Make sure the header size is correct and doesn't overwrite data
 
 		if (coffHeader.getOptHeaderSize() == 0) {
-			throw FailureManager.fail(
-				Loader.class,
-				ExitCode.Unsupported,
-				"Optional COFF header is currently required"
-			);
+			throw fail(ExitCode.Unsupported, "Optional COFF header is currently required");
 		}
 
 		var format = nextU16();
 		if (format == 0x10b) {
 			// OK, PE32
 		} else if (format == 0x20b) {
-			throw FailureManager.fail(
-				Loader.class,
-				ExitCode.Unsupported,
-				"64 bit address space is not supported yet"
-			);
+			throw fail(ExitCode.Unsupported, "64 bit address space is not supported yet");
 		} else {
-			throw FailureManager.fail(
-				Loader.class,
-				ExitCode.InvalidFile,
-				"Incorrect optional COFF header magic number"
-			);
+			throw fail(ExitCode.InvalidFile, "Incorrect optional COFF header magic number");
 		}
 
 		var extHeader = CoffExtendedHeader
@@ -157,6 +141,10 @@ public class Loader {
 			.build();
 		logger.debug(extHeader.toString());
 
+		if (extHeader.getFileAlignment() == 0) {
+			throw fail(ExitCode.InvalidFile, "File alignment cannot be zero");
+		}
+
 		// TODO: do all kind of checks
 
 		return extHeader;
@@ -164,7 +152,7 @@ public class Loader {
 
 	private PeHeader loadDataDirectories(CoffExtendedHeader coffHeader) {
 		if (coffHeader.getRvaCount() > DataDirectoryFieldName.values().length) {
-			throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "Too many data directories");
+			throw fail(ExitCode.InvalidFile, "Too many data directories");
 		}
 
 		LinkedHashMap<DataDirectoryFieldName, DataDirectory> dataDirs = new LinkedHashMap<>();
@@ -204,7 +192,7 @@ public class Loader {
 				var c = nextU8();
 				if (c != 0) {
 					if (Character.isISOControl(c)) {
-						throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "Section name is invalid");
+						throw fail(ExitCode.InvalidFile, "Section name is invalid");
 					}
 					nameBuilder.append(Character.toString(c));
 				}
@@ -231,6 +219,42 @@ public class Loader {
 		return sections;
 	}
 
+	private PeFile loadSectionContent(PeHeader peHeader, List<PeSectionHeader> sectionHeaders) {
+		var sections = sectionHeaders
+			.stream()
+			.map((sectionHeader) -> {
+				if (sectionHeader.getRawDataSize() % peHeader.getCoffExtendedHeader().getFileAlignment() != 0) {
+					throw fail("Section raw data is not aligned");
+				}
+
+				if (sectionHeader.getVirtualSize() >= MAX_SAFE_VIRTUAL_SECTION_SIZE) {
+					throw fail(ExitCode.Unsupported, "Section too big ; is it a mistake?");
+				}
+
+				var content = new int[(int) sectionHeader.getVirtualSize()];
+
+				reader.skipAt(sectionHeader.getRawDataPtr());
+				for (int i = 0; i < sectionHeader.getVirtualSize(); ++i) {
+					content[i] = nextU8();
+				}
+
+				return PeSection
+					.builder()
+					.header(sectionHeader)
+					.content(content)
+					.build();
+			})
+			.toList();
+
+		var peFile = PeFile
+			.builder()
+			.header(peHeader)
+			.sections(sections)
+			.build();
+		logger.debug(peFile.toString());
+		return peFile;
+	}
+
 	private int nextU8() {
 		var v = reader.nextU8();
 		logger.debug(String.format("Reading 0x%1$02X", v));
@@ -247,5 +271,13 @@ public class Loader {
 		var v = reader.nextU32();
 		logger.debug(String.format("Reading 0x%1$08X", v));
 		return v;
+	}
+
+	private RuntimeException fail(String reason) {
+		return fail(ExitCode.InvalidFile, reason);
+	}
+
+	private RuntimeException fail(ExitCode exitCode, String reason) {
+		return FailureManager.fail(Loader.class, exitCode, reason);
 	}
 }
