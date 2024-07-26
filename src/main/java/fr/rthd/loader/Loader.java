@@ -1,20 +1,18 @@
-package fr.rthd.checker.pe;
+package fr.rthd.loader;
 
-import fr.rthd.checker.LittleEndianReader;
-import fr.rthd.checker.Loader;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
-import fr.rthd.types.pe.CoffCharacteristicsFlags;
-import fr.rthd.types.pe.CoffExtendedHeader;
-import fr.rthd.types.pe.CoffHeader;
-import fr.rthd.types.pe.DataDirectory;
-import fr.rthd.types.pe.DataDirectoryFieldName;
-import fr.rthd.types.pe.MachineType;
-import fr.rthd.types.pe.PeHeader;
-import fr.rthd.types.pe.Section;
-import fr.rthd.types.pe.SectionCharacteristicsFlags;
-import fr.rthd.types.pe.WindowsSubsystem;
+import fr.rthd.types.CoffCharacteristicsFlags;
+import fr.rthd.types.CoffExtendedHeader;
+import fr.rthd.types.CoffHeader;
+import fr.rthd.types.DataDirectory;
+import fr.rthd.types.DataDirectoryFieldName;
+import fr.rthd.types.MachineType;
+import fr.rthd.types.PeHeader;
+import fr.rthd.types.PeSectionHeader;
+import fr.rthd.types.SectionCharacteristicsFlags;
+import fr.rthd.types.WindowsSubsystem;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,16 +22,15 @@ import java.util.List;
  * Portable Executable format
  * FIXME: Currently only supports x86
  */
-public class PeLoader implements Loader {
-	private static final Logger logger = new Logger(PeLoader.class);
+public class Loader {
+	private static final Logger logger = new Logger(Loader.class);
 
 	private final LittleEndianReader reader;
 
-	public PeLoader(List<Byte> bytes) {
+	public Loader(List<Byte> bytes) {
 		this.reader = new LittleEndianReader(bytes);
 	}
 
-	@Override
 	public void load() {
 		checkDosHeader();
 		checkDosStub();
@@ -46,7 +43,7 @@ public class PeLoader implements Loader {
 	private void checkDosHeader() {
 		if (nextU16() != 0x5a4d) {
 			throw FailureManager.fail(
-				PeLoader.class,
+				Loader.class,
 				ExitCode.InvalidFile,
 				"Not a DOS executable: magic number not found"
 			);
@@ -63,7 +60,7 @@ public class PeLoader implements Loader {
 
 	private CoffHeader loadCoffHeader() {
 		if (nextU32() != 0x4550) {
-			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Not a PE image: magic number not found");
+			throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "Not a PE image: magic number not found");
 		}
 
 		var coffHeader = CoffHeader
@@ -79,20 +76,20 @@ public class PeLoader implements Loader {
 		logger.debug(coffHeader.toString());
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.ExecutableImage)) {
-			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "File is not executable");
+			throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "File is not executable");
 		}
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.Machine32Bit)) {
 			// FIXME: is it really 16 bits exe?
 			throw FailureManager.fail(
-				PeLoader.class,
+				Loader.class,
 				ExitCode.Unsupported,
 				"16 bits executables are not supported"
 			);
 		}
 
 		if (coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.DLL)) {
-			throw FailureManager.fail(PeLoader.class, ExitCode.Unsupported, "DLLs are not supported yet");
+			throw FailureManager.fail(Loader.class, ExitCode.Unsupported, "DLLs are not supported yet");
 		}
 
 		return coffHeader;
@@ -103,7 +100,7 @@ public class PeLoader implements Loader {
 
 		if (coffHeader.getOptHeaderSize() == 0) {
 			throw FailureManager.fail(
-				PeLoader.class,
+				Loader.class,
 				ExitCode.Unsupported,
 				"Optional COFF header is currently required"
 			);
@@ -114,13 +111,13 @@ public class PeLoader implements Loader {
 			// OK, PE32
 		} else if (format == 0x20b) {
 			throw FailureManager.fail(
-				PeLoader.class,
+				Loader.class,
 				ExitCode.Unsupported,
 				"64 bit address space is not supported yet"
 			);
 		} else {
 			throw FailureManager.fail(
-				PeLoader.class,
+				Loader.class,
 				ExitCode.InvalidFile,
 				"Incorrect optional COFF header magic number"
 			);
@@ -167,7 +164,7 @@ public class PeLoader implements Loader {
 
 	private PeHeader loadDataDirectories(CoffExtendedHeader coffHeader) {
 		if (coffHeader.getRvaCount() > DataDirectoryFieldName.values().length) {
-			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Too many data directories");
+			throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "Too many data directories");
 		}
 
 		LinkedHashMap<DataDirectoryFieldName, DataDirectory> dataDirs = new LinkedHashMap<>();
@@ -198,8 +195,8 @@ public class PeLoader implements Loader {
 		return header;
 	}
 
-	private List<Section> loadSectionTable(PeHeader peHeader) {
-		var sections = new ArrayList<Section>();
+	private List<PeSectionHeader> loadSectionTable(PeHeader peHeader) {
+		var sections = new ArrayList<PeSectionHeader>();
 
 		for (var idx = 0; idx < peHeader.getCoffExtendedHeader().getCoffHeader().getNumberOfSections(); ++idx) {
 			var nameBuilder = new StringBuilder();
@@ -207,14 +204,14 @@ public class PeLoader implements Loader {
 				var c = nextU8();
 				if (c != 0) {
 					if (Character.isISOControl(c)) {
-						throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Section name is invalid");
+						throw FailureManager.fail(Loader.class, ExitCode.InvalidFile, "Section name is invalid");
 					}
 					nameBuilder.append(Character.toString(c));
 				}
 			}
 
 			sections.add(
-				Section
+				PeSectionHeader
 					.builder()
 					.name(nameBuilder.toString())
 					.virtualSize(nextU32())

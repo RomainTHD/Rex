@@ -1,7 +1,6 @@
 package fr.rthd;
 
-import fr.rthd.checker.LoaderFactory;
-import fr.rthd.types.ExecutableFormat;
+import fr.rthd.loader.Loader;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.io.BinaryReader;
@@ -16,7 +15,7 @@ public class Main {
 		if (args[0].equals("-i")) {
 			// TODO: move somewhere else
 			var content = new BinaryReader().readFileFromPath(args[1]);
-			LoaderFactory.getInstance(ExecutableFormat.PE, content).load();
+			new Loader(content).load();
 		}
 
 		FailureManager.success();

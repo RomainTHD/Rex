@@ -1,4 +1,4 @@
-package fr.rthd.checker;
+package fr.rthd.loader;
 
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;

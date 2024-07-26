@@ -1,4 +1,4 @@
-package fr.rthd.types.pe;
+package fr.rthd.types;
 
 import lombok.Builder;
 import lombok.ToString;
@@ -9,7 +9,7 @@ import java.util.Set;
 @Builder
 @Value
 @ToString
-public class Section {
+public class PeSectionHeader {
 	/**
 	 * 8-byte, null-padded UTF-8 encoded string
 	 */

@@ -1,4 +1,4 @@
-package fr.rthd.types.pe;
+package fr.rthd.types;
 
 import lombok.Getter;
 
