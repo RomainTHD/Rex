@@ -12,7 +12,8 @@ public enum ExitCode {
 	InvalidCliArgument(2),
 	FileNotFound(3),
 	InvalidFile(4),
-	Unsupported(5);
+	Unsupported(5),
+	IllegalOperation(6);
 
 	private final int value;
 }

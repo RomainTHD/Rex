@@ -11,6 +11,7 @@ public class Runner {
 	private static final Logger logger = new Logger(Runner.class);
 	private final PeFile peFile;
 	private LittleEndianDataManager virtualSpace;
+	private Disassembler disassembler;
 
 	public Runner(PeFile peFile) {
 		this.peFile = peFile;
@@ -18,8 +19,12 @@ public class Runner {
 
 	public void run() {
 		loadVirtualSpace();
+		this.disassembler = new Disassembler(virtualSpace);
 		jumpAt((int) this.peFile.getHeader().getCoffExtendedHeader().getEntryPointAddr());
 		dump();
+		for (int i = 0; i < 10; ++i) {
+			disassembler.step();
+		}
 	}
 
 	private void loadVirtualSpace() {
