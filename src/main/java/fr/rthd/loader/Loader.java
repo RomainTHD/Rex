@@ -3,6 +3,7 @@ package fr.rthd.loader;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
+import fr.rthd.common.Utils;
 import fr.rthd.types.CoffCharacteristicsFlags;
 import fr.rthd.types.CoffExtendedHeader;
 import fr.rthd.types.CoffHeader;
@@ -257,19 +258,19 @@ public class Loader {
 
 	private int nextU8() {
 		var v = reader.nextU8();
-		logger.debug(String.format("Reading 0x%1$02X", v));
+		logger.debug(String.format("Reading %s", Utils.u8ToString(v)));
 		return v;
 	}
 
 	private int nextU16() {
 		var v = reader.nextU16();
-		logger.debug(String.format("Reading 0x%1$04X", v));
+		logger.debug(String.format("Reading %s", Utils.u16ToString(v)));
 		return v;
 	}
 
 	private long nextU32() {
 		var v = reader.nextU32();
-		logger.debug(String.format("Reading 0x%1$08X", v));
+		logger.debug(String.format("Reading %s", Utils.u32ToString(v)));
 		return v;
 	}
 
