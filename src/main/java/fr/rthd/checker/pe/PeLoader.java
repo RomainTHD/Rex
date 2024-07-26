@@ -12,8 +12,11 @@ import fr.rthd.types.pe.DataDirectory;
 import fr.rthd.types.pe.DataDirectoryFieldName;
 import fr.rthd.types.pe.MachineType;
 import fr.rthd.types.pe.PeHeader;
+import fr.rthd.types.pe.Section;
+import fr.rthd.types.pe.SectionCharacteristicsFlags;
 import fr.rthd.types.pe.WindowsSubsystem;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -34,10 +37,10 @@ public class PeLoader implements Loader {
 	public void load() {
 		checkDosHeader();
 		checkDosStub();
-		var coffHeader = checkCoffHeader();
-		var coffExtendedHeader = checkOptCoffHeader(coffHeader);
-		var peHeader = checkDataDirectories(coffExtendedHeader);
-		checkSectionTable();
+		var coffHeader = loadCoffHeader();
+		var coffExtendedHeader = loadOptCoffHeader(coffHeader);
+		var peHeader = loadDataDirectories(coffExtendedHeader);
+		var sections = loadSectionTable(peHeader);
 	}
 
 	private void checkDosHeader() {
@@ -58,7 +61,7 @@ public class PeLoader implements Loader {
 		// Never checked, @0x3c will skip directly to NT headers
 	}
 
-	private CoffHeader checkCoffHeader() {
+	private CoffHeader loadCoffHeader() {
 		if (nextU32() != 0x4550) {
 			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Not a PE image: magic number not found");
 		}
@@ -95,7 +98,7 @@ public class PeLoader implements Loader {
 		return coffHeader;
 	}
 
-	private CoffExtendedHeader checkOptCoffHeader(CoffHeader coffHeader) {
+	private CoffExtendedHeader loadOptCoffHeader(CoffHeader coffHeader) {
 		// TODO: Make sure the header size is correct and doesn't overwrite data
 
 		if (coffHeader.getOptHeaderSize() == 0) {
@@ -162,7 +165,7 @@ public class PeLoader implements Loader {
 		return extHeader;
 	}
 
-	private PeHeader checkDataDirectories(CoffExtendedHeader coffHeader) {
+	private PeHeader loadDataDirectories(CoffExtendedHeader coffHeader) {
 		if (coffHeader.getRvaCount() > DataDirectoryFieldName.values().length) {
 			throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Too many data directories");
 		}
@@ -195,7 +198,40 @@ public class PeLoader implements Loader {
 		return header;
 	}
 
-	private void checkSectionTable() {
+	private List<Section> loadSectionTable(PeHeader peHeader) {
+		var sections = new ArrayList<Section>();
+
+		for (var idx = 0; idx < peHeader.getCoffExtendedHeader().getCoffHeader().getNumberOfSections(); ++idx) {
+			var nameBuilder = new StringBuilder();
+			for (int i = 0; i < 8; ++i) {
+				var c = nextU8();
+				if (c != 0) {
+					if (Character.isISOControl(c)) {
+						throw FailureManager.fail(PeLoader.class, ExitCode.InvalidFile, "Section name is invalid");
+					}
+					nameBuilder.append(Character.toString(c));
+				}
+			}
+
+			sections.add(
+				Section
+					.builder()
+					.name(nameBuilder.toString())
+					.virtualSize(nextU32())
+					.virtualAddress(nextU32())
+					.rawDataSize(nextU32())
+					.rawDataPtr(nextU32())
+					.relocationsPtr(nextU32())
+					.lineNumberPtr(nextU32())
+					.relocationsCount(nextU16())
+					.lineNumberCount(nextU16())
+					.characteristics(SectionCharacteristicsFlags.toFlagSet(nextU32()))
+					.build()
+			);
+		}
+
+		logger.debug(sections.toString());
+		return sections;
 	}
 
 	private int nextU8() {
