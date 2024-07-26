@@ -10,8 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class BinaryReader {
-	public List<Byte> readFileFromPath(String path) {
-		var res = new ArrayList<Byte>();
+	public int[] readFileFromPath(String path) {
+		var res = new ArrayList<Integer>();
 
 		try (
 			var inputStream = new FileInputStream(path);
@@ -19,10 +19,10 @@ public class BinaryReader {
 			int byteRead;
 			while ((byteRead = inputStream.read()) != -1) {
 				// TODO: Support endianness?
-				res.add((byte) byteRead);
+				res.add(byteRead);
 			}
 
-			return res;
+			return res.stream().mapToInt((i) -> i).toArray();
 		} catch (FileNotFoundException e) {
 			throw FailureManager.fail(BinaryReader.class, ExitCode.FileNotFound, e);
 		} catch (IOException e) {

@@ -4,6 +4,7 @@ import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
 import fr.rthd.common.Utils;
+import fr.rthd.io.LittleEndianDataManager;
 import fr.rthd.types.CoffCharacteristicsFlags;
 import fr.rthd.types.CoffExtendedHeader;
 import fr.rthd.types.CoffHeader;
@@ -29,10 +30,10 @@ public class Loader {
 	private static final Logger logger = new Logger(Loader.class);
 	private static final int MAX_SAFE_VIRTUAL_SECTION_SIZE = 100_000;
 
-	private final LittleEndianReader reader;
+	private final LittleEndianDataManager reader;
 
-	public Loader(List<Byte> bytes) {
-		this.reader = new LittleEndianReader(bytes);
+	public Loader(int[] bytes) {
+		this.reader = new LittleEndianDataManager(bytes);
 	}
 
 	public PeFile load() {
@@ -50,9 +51,9 @@ public class Loader {
 			throw fail(ExitCode.InvalidFile, "Not a DOS executable: magic number not found");
 		}
 
-		reader.skipAt(0x3c);
+		reader.jumpAt(0x3c);
 		var peHeaderStart = nextU32();
-		reader.skipAt(peHeaderStart);
+		reader.jumpAt((int) peHeaderStart);
 	}
 
 	private void checkDosStub() {
@@ -234,7 +235,7 @@ public class Loader {
 
 				var content = new int[(int) sectionHeader.getVirtualSize()];
 
-				reader.skipAt(sectionHeader.getRawDataPtr());
+				reader.jumpAt((int) sectionHeader.getRawDataPtr());
 				for (int i = 0; i < sectionHeader.getVirtualSize(); ++i) {
 					content[i] = nextU8();
 				}
@@ -257,19 +258,19 @@ public class Loader {
 	}
 
 	private int nextU8() {
-		var v = reader.nextU8();
+		var v = reader.readU8();
 		logger.debug(String.format("Reading %s", Utils.u8ToString(v)));
 		return v;
 	}
 
 	private int nextU16() {
-		var v = reader.nextU16();
+		var v = reader.readU16();
 		logger.debug(String.format("Reading %s", Utils.u16ToString(v)));
 		return v;
 	}
 
 	private long nextU32() {
-		var v = reader.nextU32();
+		var v = reader.readU32();
 		logger.debug(String.format("Reading %s", Utils.u32ToString(v)));
 		return v;
 	}

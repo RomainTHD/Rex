@@ -4,16 +4,13 @@ import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
 import fr.rthd.common.Utils;
+import fr.rthd.io.LittleEndianDataManager;
 import fr.rthd.types.PeFile;
 
 public class Runner {
 	private static final Logger logger = new Logger(Runner.class);
 	private final PeFile peFile;
-	private int[] _virtualSpace;
-	/**
-	 * Program Counter, aka Instruction Pointer
-	 */
-	private int _pc;
+	private LittleEndianDataManager virtualSpace;
 
 	public Runner(PeFile peFile) {
 		this.peFile = peFile;
@@ -27,7 +24,7 @@ public class Runner {
 
 	private void loadVirtualSpace() {
 		// FIXME: what value to use?
-		_virtualSpace = new int[0x10_000];
+		this.virtualSpace = new LittleEndianDataManager(new int[0x10_000]);
 		this.peFile
 			.getSections()
 			.forEach((section) -> {
@@ -44,32 +41,13 @@ public class Runner {
 	}
 
 	private void writeU8(int value) {
-		if (value > 0xff || value < 0) {
-			throw fail(
-				ExitCode.InvalidState,
-				String.format(
-					"Tried to insert value %s @%s",
-					Utils.u32ToString(value),
-					Utils.u32ToString(getPc())
-				)
-			);
-		}
-
 		logger.debug(String.format("Writing %s", Utils.u8ToString(value)));
-		this._virtualSpace[incr()] = value;
-	}
-
-	private long getPc() {
-		return _pc;
+		virtualSpace.writeU8(value);
 	}
 
 	private void jumpAt(int newPc) {
 		logger.debug("Jumped at @" + Utils.u32ToString(newPc));
-		this._pc = newPc;
-	}
-
-	private int incr() {
-		return this._pc++;
+		this.virtualSpace.jumpAt(newPc);
 	}
 
 	private RuntimeException fail(ExitCode exitCode, String reason) {
@@ -95,7 +73,7 @@ public class Runner {
 
 		var ellipsis = false;
 
-		for (int row = 0; row <= this._virtualSpace.length / 16; ++row) {
+		for (int row = 0; row <= this.virtualSpace.size() / 16; ++row) {
 			sb = new StringBuilder();
 			var sum = 0;
 
@@ -105,8 +83,8 @@ public class Runner {
 			for (int col = 0; col < 16; col++) {
 				var idx = row * 16 + col;
 				var cell = 0;
-				if (idx < this._virtualSpace.length) {
-					cell = this._virtualSpace[idx];
+				if (idx < this.virtualSpace.size()) {
+					cell = this.virtualSpace.readAt(idx);
 				}
 				sum += cell;
 				sb.append(Utils.u8ToString(cell, false));
