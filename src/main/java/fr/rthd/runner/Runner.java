@@ -23,7 +23,7 @@ public class Runner {
 		loadVirtualSpace();
 		loadRegisters();
 		disassembler = new Disassembler(virtualMemory, registers);
-		jumpAt((int) this.peFile.getHeader().getCoffExtendedHeader().getEntryPointAddr());
+		jumpAt((int) peFile.getHeader().getCoffExtendedHeader().getEntryPointAddr());
 		virtualMemory.dump();
 
 		logger.info("Starting program execution");
@@ -33,13 +33,17 @@ public class Runner {
 		} while (canContinue);
 		virtualMemory.dump();
 		registers.dump();
-		logger.info("Program exited with exit code " + registers.get(registers.EAX));
+		logger.info("Program exited with exit code " + registers.get(Registers.EAX));
 	}
 
 	private void loadVirtualSpace() {
 		virtualMemory = new LittleEndianDataManager(
 			PAGE_SIZE,
-			(int) (peFile.getHeader().getCoffExtendedHeader().getImageBase() / PAGE_SIZE + 1)
+			(int) (
+				peFile.getHeader().getCoffExtendedHeader().getImageBase()
+					+ peFile.getHeader().getCoffExtendedHeader().getStackSizeToReserve()
+					+ peFile.getHeader().getCoffExtendedHeader().getHeapSizeToReserve()
+			) / PAGE_SIZE + 1
 		);
 		peFile
 			.getSections()
@@ -60,7 +64,7 @@ public class Runner {
 		registers = new Registers();
 		// FIXME: should differentiate between reserve and commit
 		registers.set(
-			registers.ESP,
+			Registers.ESP,
 			peFile.getHeader().getCoffExtendedHeader().getStackSizeToReserve()
 				+ peFile.getHeader().getCoffExtendedHeader().getImageBase()
 		);
