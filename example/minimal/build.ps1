@@ -5,7 +5,7 @@ rm file.s
 gcc -fverbose-asm `
     -march=i386 `
     -save-temps `
-    -Os `
+    -O0 `
     -masm=intel `
     -s `
     -fdata-sections `
