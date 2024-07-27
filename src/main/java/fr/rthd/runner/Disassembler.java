@@ -29,6 +29,7 @@ public class Disassembler {
 			case 0x88, 0x89, 0x8c -> mov(false);
 			case 0x8a, 0x8b -> mov(true);
 			case 0x90 -> nop();
+			case 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf -> movLit(opCode);
 			case 0xc2, 0xc3 -> ret();
 			default -> throw FailureManager.fail(
 				Disassembler.class,
@@ -119,6 +120,13 @@ public class Disassembler {
 
 	private void nop() {
 		logger.debug("NOP");
+	}
+
+	private void movLit(int opCode) {
+		var r = registerOperandLeft(opCode);
+		var lit = virtualMemory.readU32();
+		logger.debug(String.format("MOV %s, %d", registers.getRegName(r), lit));
+		registers.set(r, lit);
 	}
 
 	private void ret() {
