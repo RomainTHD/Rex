@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class Disassembler {
 	private static final Logger logger = new Logger(Disassembler.class);
-	private final LittleEndianDataManager virtualSpace;
+	private final LittleEndianDataManager virtualMemory;
 	private final Registers registers;
 
 	private boolean canContinue = true;
@@ -63,7 +63,7 @@ public class Disassembler {
 	}
 
 	private int nextU8() {
-		var i = virtualSpace.readU8();
+		var i = virtualMemory.readU8();
 		// logger.debug("Reading " + Utils.u8ToString(i));
 		return i;
 	}

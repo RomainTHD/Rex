@@ -9,8 +9,9 @@ import fr.rthd.types.PeFile;
 
 public class Runner {
 	private static final Logger logger = new Logger(Runner.class);
+	private static final int PAGE_SIZE = 0x1000;
 	private final PeFile peFile;
-	private LittleEndianDataManager virtualSpace;
+	private LittleEndianDataManager virtualMemory;
 	private Registers registers;
 	private Disassembler disassembler;
 
@@ -21,22 +22,25 @@ public class Runner {
 	public void run() {
 		loadVirtualSpace();
 		loadRegisters();
-		disassembler = new Disassembler(virtualSpace, registers);
+		disassembler = new Disassembler(virtualMemory, registers);
 		jumpAt((int) this.peFile.getHeader().getCoffExtendedHeader().getEntryPointAddr());
-		virtualSpace.dump();
+		virtualMemory.dump();
 
 		logger.info("Starting program execution");
 		boolean canContinue;
 		do {
 			canContinue = disassembler.step();
 		} while (canContinue);
-		logger.info("Program exited with exit code " + registers.get(registers.EAX));
+		virtualMemory.dump();
 		registers.dump();
+		logger.info("Program exited with exit code " + registers.get(registers.EAX));
 	}
 
 	private void loadVirtualSpace() {
-		// FIXME: what value to use?
-		virtualSpace = new LittleEndianDataManager(new int[0x100_0000]);
+		virtualMemory = new LittleEndianDataManager(
+			PAGE_SIZE,
+			(int) (peFile.getHeader().getCoffExtendedHeader().getImageBase() / PAGE_SIZE + 1)
+		);
 		peFile
 			.getSections()
 			.forEach((section) -> {
@@ -64,12 +68,12 @@ public class Runner {
 
 	private void writeU8(int value) {
 		// logger.debug(String.format("Writing %s", Utils.u8ToString(value)));
-		virtualSpace.writeU8(value);
+		virtualMemory.writeU8(value);
 	}
 
 	private void jumpAt(int newPc) {
 		logger.debug("Jumped at @" + Utils.u32ToString(newPc));
-		virtualSpace.jumpAt(newPc);
+		virtualMemory.jumpAt(newPc);
 	}
 
 	private RuntimeException fail(ExitCode exitCode, String reason) {

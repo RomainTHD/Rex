@@ -13,7 +13,8 @@ public enum ExitCode {
 	FileNotFound(3),
 	InvalidFile(4),
 	Unsupported(5),
-	IllegalOperation(6);
+	IllegalOperation(6),
+	Segfault(7);
 
 	private final int value;
 }

@@ -4,27 +4,40 @@ import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
 import fr.rthd.common.Utils;
-import lombok.Builder;
 
 public class LittleEndianDataManager {
 	private static final Logger logger = new Logger(LittleEndianDataManager.class);
-	private final int[] bytes;
+	private final int[][] pages;
+	private final int pageCount;
+	private final int pageSize;
 	private int idx = 0;
 
-	@Builder
 	public LittleEndianDataManager(int[] bytes) {
-		this.bytes = bytes;
+		this.pageSize = bytes.length;
+		this.pageCount = 1;
+		this.pages = new int[1][];
+		this.pages[0] = bytes;
+	}
+
+	public LittleEndianDataManager(int pageSize, int pagesCount) {
+		this.pageSize = pageSize;
+		this.pageCount = pagesCount;
+		this.pages = new int[pagesCount][];
 	}
 
 	public int readU8() {
-		if (idx >= bytes.length) {
+		if (idx >= size()) {
 			throw FailureManager.fail(
 				LittleEndianDataManager.class,
 				ExitCode.InvalidFile,
-				"Tried to read after end of file"
+				"Tried to read outside of memory"
 			);
 		}
-		return bytes[idx++];
+
+		var page = pages[idx / pageSize];
+		var v = page == null ? 0 : page[idx % pageSize];
+		idx++;
+		return v;
 	}
 
 	public int readU16() {
@@ -51,7 +64,22 @@ public class LittleEndianDataManager {
 			);
 		}
 
-		this.bytes[idx++] = value;
+		if (idx >= size()) {
+			throw FailureManager.fail(
+				LittleEndianDataManager.class,
+				ExitCode.Segfault,
+				"Tried to write outside of memory"
+			);
+		}
+
+		var page = pages[idx / pageSize];
+		if (page == null) {
+			logger.debug("Created new page #" + idx / pageSize);
+			page = new int[pageSize];
+			pages[idx / pageSize] = page;
+		}
+		page[idx % pageSize] = value;
+		idx++;
 	}
 
 	public void jumpAt(int dst) {
@@ -62,17 +90,18 @@ public class LittleEndianDataManager {
 	}
 
 	public int readAt(int dst) {
-		if (dst > size()) {
-			throw FailureManager.fail(LittleEndianDataManager.class, ExitCode.InvalidFile, "Destination out of bounds");
-		}
-		return bytes[dst];
+		var prev = getPos();
+		jumpAt(dst);
+		var v = readU8();
+		jumpAt(prev);
+		return v;
 	}
 
 	public int size() {
-		return bytes.length;
+		return pageCount * pageSize;
 	}
 
-	public int getIdx() {
+	public int getPos() {
 		return idx;
 	}
 
@@ -95,33 +124,36 @@ public class LittleEndianDataManager {
 
 		var ellipsis = false;
 
-		for (int row = 0; row <= size() / 16; ++row) {
-			sb = new StringBuilder();
-			var sum = 0;
-
-			sb.append(String.format("%1$3XX", row));
-			sb.append(" | ");
-
-			for (int col = 0; col < 16; col++) {
-				var idx = row * 16 + col;
-				var cell = 0;
-				if (idx < size()) {
-					cell = readAt(idx);
-				}
-				sum += cell;
-				sb.append(Utils.u8ToString(cell, false));
-				sb.append(" ");
+		for (int pageIdx = 0; pageIdx < pageCount; ++pageIdx) {
+			if (pages[pageIdx] == null) {
+				continue;
 			}
-			sb.append("|");
 
-			if (sum == 0) {
-				if (!ellipsis) {
-					logger.debug(" ... |" + " ".repeat(49) + "|");
-					ellipsis = true;
+			for (int row = 0; row <= pageSize / 16; ++row) {
+				sb = new StringBuilder();
+				var sum = 0;
+
+				sb.append(String.format("%1$3XX", row + pageIdx * pageSize / 16));
+				sb.append(" | ");
+
+				for (int col = 0; col < 16; col++) {
+					var idx = pageIdx * pageSize + row * 16 + col;
+					var cell = readAt(idx);
+					sum += cell;
+					sb.append(Utils.u8ToString(cell, false));
+					sb.append(" ");
 				}
-			} else {
-				logger.debug(sb.toString());
-				ellipsis = false;
+				sb.append("|");
+
+				if (sum == 0) {
+					if (!ellipsis) {
+						logger.debug(" ... |" + " ".repeat(49) + "|");
+						ellipsis = true;
+					}
+				} else {
+					logger.debug(sb.toString());
+					ellipsis = false;
+				}
 			}
 		}
 
