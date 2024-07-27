@@ -82,17 +82,41 @@ public class LittleEndianDataManager {
 		idx++;
 	}
 
+	public void writeU32(int addr, long value) {
+		int prev = getPos();
+
+		jumpAt(addr);
+		writeU8((int) (value & 0xff));
+		writeU8((int) ((value >> 8) & 0xff));
+		writeU8((int) ((value >> 16) & 0xff));
+		writeU8((int) ((value >> 24) & 0xff));
+
+		jumpAt(prev);
+	}
+
 	public void jumpAt(int dst) {
 		if (dst > size()) {
-			throw FailureManager.fail(LittleEndianDataManager.class, ExitCode.InvalidFile, "Destination out of bounds");
+			throw FailureManager.fail(
+				LittleEndianDataManager.class,
+				ExitCode.InvalidFile,
+				String.format("Destination %s out of bounds", Utils.u32ToString(dst))
+			);
 		}
 		idx = dst;
 	}
 
-	public int readAt(int dst) {
+	public int readU8At(int dst) {
 		var prev = getPos();
 		jumpAt(dst);
 		var v = readU8();
+		jumpAt(prev);
+		return v;
+	}
+
+	public long readU32At(int dst) {
+		var prev = getPos();
+		jumpAt(dst);
+		var v = readU32();
 		jumpAt(prev);
 		return v;
 	}
@@ -124,6 +148,17 @@ public class LittleEndianDataManager {
 
 		var ellipsis = false;
 
+		{
+			var sum = 0;
+			for (int idx = 0; idx < 16; ++idx) {
+				sum += readU8At(idx);
+			}
+			if (sum == 0) {
+				logger.debug(" ... |" + " ".repeat(49) + "|");
+				ellipsis = true;
+			}
+		}
+
 		for (int pageIdx = 0; pageIdx < pageCount; ++pageIdx) {
 			if (pages[pageIdx] == null) {
 				continue;
@@ -138,7 +173,7 @@ public class LittleEndianDataManager {
 
 				for (int col = 0; col < 16; col++) {
 					var idx = pageIdx * pageSize + row * 16 + col;
-					var cell = readAt(idx);
+					var cell = readU8At(idx);
 					sum += cell;
 					sb.append(Utils.u8ToString(cell, false));
 					sb.append(" ");

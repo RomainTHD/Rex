@@ -9,3 +9,4 @@ Liens utiles :
 * [PE-bear](https://hshrzd.wordpress.com/pe-bear/)
 * [Référence OpCodes x86](http://ref.x86asm.net/coder64.html)
     * Tirée du [Architectures Software Developer's Manual](https://cdrdv2.intel.com/v1/dl/getContent/671200) de Intel (cf. Volume 2 Appendix A)
+* [Instructions x86](https://www.cs.virginia.edu/~evans/cs216/guides/x86.html)

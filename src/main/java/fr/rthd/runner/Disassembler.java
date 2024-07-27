@@ -39,10 +39,6 @@ public class Disassembler {
 	}
 
 	private int getRegister(int value) {
-		if (value / 0b1000 != 0) {
-			// TODO: support this
-		}
-
 		return registers.intToReg(value);
 	}
 
@@ -86,26 +82,33 @@ public class Disassembler {
 		var b = nextU8();
 		var r1 = registerOperandLeft(b);
 		var r2 = registerOperandRight(b);
-		logger.debug(String.format("XOR %s, %s", registers.registerName(r1), registers.registerName(r2)));
+		logger.debug(String.format("XOR %s, %s", registers.getRegName(r1), registers.getRegName(r2)));
 		registers.set(r1, registers.get(r1) ^ registers.get(r2));
 	}
 
 	private void push(int opCode) {
 		var reg = registerOperandLeft(opCode);
-		logger.debug("PUSH " + registers.registerName(reg));
+		logger.debug("PUSH " + registers.getRegName(reg));
+		registers.set(Registers.ESP, registers.get(Registers.ESP) - 4);
+		virtualMemory.writeU32((int) registers.get(Registers.ESP), registers.get(reg));
 	}
 
 	private void pop(int opCode) {
 		var reg = getRegister(opCode);
-		logger.debug("POP " + registers.registerName(reg));
+		logger.debug("POP " + registers.getRegName(reg));
+		registers.set(
+			reg,
+			virtualMemory.readU32At((int) registers.get(Registers.ESP))
+		);
+		registers.set(Registers.ESP, registers.get(Registers.ESP) + 4);
 	}
 
 	private void mov(int opCode) {
 		var b = nextU8();
 		var r1 = registerOperandLeft(b);
 		var r2 = registerOperandRight(b);
-		logger.debug(String.format("MOV %s, %s", registers.registerName(r1), registers.registerName(r2)));
-		registers.set(r1, registers.get(r2));
+		logger.debug(String.format("MOV %s, %s", registers.getRegName(r2), registers.getRegName(r1)));
+		registers.set(r2, registers.get(r1));
 	}
 
 	private void nop() {

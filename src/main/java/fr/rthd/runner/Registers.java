@@ -8,21 +8,21 @@ import fr.rthd.common.Utils;
 public class Registers {
 	private static final Logger logger = new Logger(Registers.class);
 
-	public final int EAX = 0b000;
-	public final int ECX = 0b001;
-	public final int EDX = 0b010;
-	public final int EBX = 0b011;
-	public final int ESP = 0b100;
-	public final int EBP = 0b101;
-	public final int ESI = 0b110;
-	public final int EDI = 0b111;
+	public static final int EAX = 0b000;
+	public static final int ECX = 0b001;
+	public static final int EDX = 0b010;
+	public static final int EBX = 0b011;
+	public static final int ESP = 0b100;
+	public static final int EBP = 0b101;
+	public static final int ESI = 0b110;
+	public static final int EDI = 0b111;
 	private final long[] values;
 
 	public Registers() {
 		values = new long[8];
 	}
 
-	public String registerName(int value) {
+	public String getRegName(int value) {
 		return switch (value) {
 			case 0b000 -> "EAX";
 			case 0b001 -> "ECX";
@@ -50,7 +50,7 @@ public class Registers {
 
 	public void dump() {
 		for (int i = 0b000; i <= 0b111; ++i) {
-			logger.debug(String.format("%s: %s", registerName(i), Utils.u32ToString(get(i))));
+			logger.debug(String.format("%s: %s", getRegName(i), Utils.u32ToString(get(i))));
 		}
 	}
 }
