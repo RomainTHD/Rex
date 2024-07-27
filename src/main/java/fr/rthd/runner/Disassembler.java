@@ -26,7 +26,8 @@ public class Disassembler {
 			case 0x30, 0x31, 0x32, 0x33, 0x34, 0x35 -> xor();
 			case 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 -> push(opCode);
 			case 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f -> pop(opCode);
-			case 0x88, 0x89, 0x8a, 0x8b, 0x8c -> mov(opCode);
+			case 0x88, 0x89, 0x8c -> mov(false);
+			case 0x8a, 0x8b -> mov(true);
 			case 0x90 -> nop();
 			case 0xc2, 0xc3 -> ret();
 			default -> throw FailureManager.fail(
@@ -103,12 +104,17 @@ public class Disassembler {
 		registers.set(Registers.ESP, registers.get(Registers.ESP) + 4);
 	}
 
-	private void mov(int opCode) {
+	private void mov(boolean flipped) {
 		var b = nextU8();
 		var r1 = registerOperandLeft(b);
 		var r2 = registerOperandRight(b);
-		logger.debug(String.format("MOV %s, %s", registers.getRegName(r2), registers.getRegName(r1)));
-		registers.set(r2, registers.get(r1));
+		if (flipped) {
+			var tmp = r1;
+			r1 = r2;
+			r2 = tmp;
+		}
+		logger.debug(String.format("MOV %s, %s", registers.getRegName(r1), registers.getRegName(r2)));
+		registers.set(r1, registers.get(r2));
 	}
 
 	private void nop() {
