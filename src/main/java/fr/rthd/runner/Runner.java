@@ -11,6 +11,7 @@ public class Runner {
 	private static final Logger logger = new Logger(Runner.class);
 	private final PeFile peFile;
 	private LittleEndianDataManager virtualSpace;
+	private Registers registers;
 	private Disassembler disassembler;
 
 	public Runner(PeFile peFile) {
@@ -19,18 +20,24 @@ public class Runner {
 
 	public void run() {
 		loadVirtualSpace();
-		this.disassembler = new Disassembler(virtualSpace);
+		loadRegisters();
+		disassembler = new Disassembler(virtualSpace, registers);
 		jumpAt((int) this.peFile.getHeader().getCoffExtendedHeader().getEntryPointAddr());
-		dump();
-		for (int i = 0; i < 10; ++i) {
-			disassembler.step();
-		}
+		virtualSpace.dump();
+
+		logger.info("Starting program execution");
+		boolean canContinue;
+		do {
+			canContinue = disassembler.step();
+		} while (canContinue);
+		logger.info("Program exited with exit code " + registers.get(registers.EAX));
+		registers.dump();
 	}
 
 	private void loadVirtualSpace() {
 		// FIXME: what value to use?
-		this.virtualSpace = new LittleEndianDataManager(new int[0x10_000]);
-		this.peFile
+		virtualSpace = new LittleEndianDataManager(new int[0x100_0000]);
+		peFile
 			.getSections()
 			.forEach((section) -> {
 				logger.debug(String.format(
@@ -45,69 +52,27 @@ public class Runner {
 			});
 	}
 
+	private void loadRegisters() {
+		registers = new Registers();
+		// FIXME: should differentiate between reserve and commit
+		registers.set(
+			registers.ESP,
+			peFile.getHeader().getCoffExtendedHeader().getStackSizeToReserve()
+				+ peFile.getHeader().getCoffExtendedHeader().getImageBase()
+		);
+	}
+
 	private void writeU8(int value) {
-		logger.debug(String.format("Writing %s", Utils.u8ToString(value)));
+		// logger.debug(String.format("Writing %s", Utils.u8ToString(value)));
 		virtualSpace.writeU8(value);
 	}
 
 	private void jumpAt(int newPc) {
 		logger.debug("Jumped at @" + Utils.u32ToString(newPc));
-		this.virtualSpace.jumpAt(newPc);
+		virtualSpace.jumpAt(newPc);
 	}
 
 	private RuntimeException fail(ExitCode exitCode, String reason) {
 		return FailureManager.fail(Runner.class, exitCode, reason);
-	}
-
-	private void dump() {
-		logger.debug("Memory dump start");
-
-		StringBuilder sb;
-
-		sb = new StringBuilder();
-		sb.append("     | ");
-		for (int i = 0; i < 16; i++) {
-			sb.append(" ")
-			  .append(Integer.toHexString(i))
-			  .append(" ");
-		}
-		sb.append("|");
-		logger.debug(sb.toString());
-
-		logger.debug("-".repeat(5) + "+" + "-".repeat(49) + "+");
-
-		var ellipsis = false;
-
-		for (int row = 0; row <= this.virtualSpace.size() / 16; ++row) {
-			sb = new StringBuilder();
-			var sum = 0;
-
-			sb.append(String.format("%1$3XX", row));
-			sb.append(" | ");
-
-			for (int col = 0; col < 16; col++) {
-				var idx = row * 16 + col;
-				var cell = 0;
-				if (idx < this.virtualSpace.size()) {
-					cell = this.virtualSpace.readAt(idx);
-				}
-				sum += cell;
-				sb.append(Utils.u8ToString(cell, false));
-				sb.append(" ");
-			}
-			sb.append("|");
-
-			if (sum == 0) {
-				if (!ellipsis) {
-					logger.debug(" ... |" + " ".repeat(49) + "|");
-					ellipsis = true;
-				}
-			} else {
-				logger.debug(sb.toString());
-				ellipsis = false;
-			}
-		}
-
-		logger.debug("Memory dump end");
 	}
 }

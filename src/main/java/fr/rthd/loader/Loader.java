@@ -3,7 +3,6 @@ package fr.rthd.loader;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
-import fr.rthd.common.Utils;
 import fr.rthd.io.LittleEndianDataManager;
 import fr.rthd.types.CoffCharacteristicsFlags;
 import fr.rthd.types.CoffExtendedHeader;
@@ -48,7 +47,7 @@ public class Loader {
 
 	private void checkDosHeader() {
 		if (nextU16() != 0x5a4d) {
-			throw fail(ExitCode.InvalidFile, "Not a DOS executable: magic number not found");
+			throw fail("Not a DOS executable: magic number not found");
 		}
 
 		reader.jumpAt(0x3c);
@@ -62,7 +61,7 @@ public class Loader {
 
 	private CoffHeader loadCoffHeader() {
 		if (nextU32() != 0x4550) {
-			throw fail(ExitCode.InvalidFile, "Not a PE image: magic number not found");
+			throw fail("Not a PE image: magic number not found");
 		}
 
 		var coffHeader = CoffHeader
@@ -78,7 +77,7 @@ public class Loader {
 		logger.debug(coffHeader.toString());
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.ExecutableImage)) {
-			throw fail(ExitCode.InvalidFile, "File is not executable");
+			throw fail("File is not executable");
 		}
 
 		if (!coffHeader.getCharacteristics().contains(CoffCharacteristicsFlags.Machine32Bit)) {
@@ -106,7 +105,7 @@ public class Loader {
 		} else if (format == 0x20b) {
 			throw fail(ExitCode.Unsupported, "64 bit address space is not supported yet");
 		} else {
-			throw fail(ExitCode.InvalidFile, "Incorrect optional COFF header magic number");
+			throw fail("Incorrect optional COFF header magic number");
 		}
 
 		var extHeader = CoffExtendedHeader
@@ -144,17 +143,23 @@ public class Loader {
 		logger.debug(extHeader.toString());
 
 		if (extHeader.getFileAlignment() == 0) {
-			throw fail(ExitCode.InvalidFile, "File alignment cannot be zero");
+			throw fail("File alignment cannot be zero");
 		}
 
-		// TODO: do all kind of checks
+		if (extHeader.getImageBase() != 0x4_0000) {
+			logger.warn("Default image base is usually 0x00400000 for Win95 and later");
+		}
+
+		if (extHeader.getImageBase() % 0x1_0000 != 0) {
+			throw fail("Image base must be a multiple of 64 K");
+		}
 
 		return extHeader;
 	}
 
 	private PeHeader loadDataDirectories(CoffExtendedHeader coffHeader) {
 		if (coffHeader.getRvaCount() > DataDirectoryFieldName.values().length) {
-			throw fail(ExitCode.InvalidFile, "Too many data directories");
+			throw fail("Too many data directories");
 		}
 
 		LinkedHashMap<DataDirectoryFieldName, DataDirectory> dataDirs = new LinkedHashMap<>();
@@ -194,7 +199,7 @@ public class Loader {
 				var c = nextU8();
 				if (c != 0) {
 					if (Character.isISOControl(c)) {
-						throw fail(ExitCode.InvalidFile, "Section name is invalid");
+						throw fail("Section name is invalid");
 					}
 					nameBuilder.append(Character.toString(c));
 				}
@@ -259,19 +264,19 @@ public class Loader {
 
 	private int nextU8() {
 		var v = reader.readU8();
-		logger.debug(String.format("Reading %s", Utils.u8ToString(v)));
+		// logger.debug(String.format("Reading %s", Utils.u8ToString(v)));
 		return v;
 	}
 
 	private int nextU16() {
 		var v = reader.readU16();
-		logger.debug(String.format("Reading %s", Utils.u16ToString(v)));
+		// logger.debug(String.format("Reading %s", Utils.u16ToString(v)));
 		return v;
 	}
 
 	private long nextU32() {
 		var v = reader.readU32();
-		logger.debug(String.format("Reading %s", Utils.u32ToString(v)));
+		// logger.debug(String.format("Reading %s", Utils.u32ToString(v)));
 		return v;
 	}
 

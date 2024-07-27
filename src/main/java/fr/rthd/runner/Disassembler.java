@@ -5,14 +5,17 @@ import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
 import fr.rthd.common.Utils;
 import fr.rthd.io.LittleEndianDataManager;
-import lombok.Builder;
+import lombok.RequiredArgsConstructor;
 
-@Builder
+@RequiredArgsConstructor
 public class Disassembler {
 	private static final Logger logger = new Logger(Disassembler.class);
 	private final LittleEndianDataManager virtualSpace;
+	private final Registers registers;
 
-	public void step() {
+	private boolean canContinue = true;
+
+	public boolean step() {
 		int opCode = nextU8();
 		switch (opCode) {
 			case 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 -> add();
@@ -23,7 +26,7 @@ public class Disassembler {
 			case 0x30, 0x31, 0x32, 0x33, 0x34, 0x35 -> xor();
 			case 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 -> push(opCode);
 			case 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f -> pop(opCode);
-			case 0x88, 0x89, 0x8a, 0x8b, 0x8c -> move(opCode);
+			case 0x88, 0x89, 0x8a, 0x8b, 0x8c -> mov(opCode);
 			case 0x90 -> nop();
 			case 0xc2, 0xc3 -> ret();
 			default -> throw FailureManager.fail(
@@ -32,35 +35,22 @@ public class Disassembler {
 				"Unsupported opcode " + Utils.u8ToString(opCode)
 			);
 		}
+		return canContinue;
 	}
 
-	private Object getRegister(int value) {
+	private int getRegister(int value) {
 		if (value / 0b1000 != 0) {
 			// TODO: support this
 		}
 
-		return switch (value % 0b1000) {
-			case 0b000 -> "EAX";
-			case 0b001 -> "ECX";
-			case 0b010 -> "EDX";
-			case 0b011 -> "EBX";
-			case 0b100 -> "ESP";
-			case 0b101 -> "EBP";
-			case 0b110 -> "ESI";
-			case 0b111 -> "EDI";
-			default -> throw FailureManager.fail(
-				Disassembler.class,
-				ExitCode.InvalidState,
-				"Unsupported register " + Utils.u8ToString(value)
-			);
-		};
+		return registers.intToReg(value);
 	}
 
-	private Object operandLeft(int value) {
+	private int registerOperandLeft(int value) {
 		return getRegister(value);
 	}
 
-	private Object operandRight(int value) {
+	private int registerOperandRight(int value) {
 		return getRegister(value >> 3);
 	}
 
@@ -94,26 +84,28 @@ public class Disassembler {
 
 	private void xor() {
 		var b = nextU8();
-		var r1 = operandLeft(b);
-		var r2 = operandRight(b);
-		logger.debug(String.format("XOR %s, %s", r1, r2));
+		var r1 = registerOperandLeft(b);
+		var r2 = registerOperandRight(b);
+		logger.debug(String.format("XOR %s, %s", registers.registerName(r1), registers.registerName(r2)));
+		registers.set(r1, registers.get(r1) ^ registers.get(r2));
 	}
 
 	private void push(int opCode) {
-		var reg = operandLeft(opCode);
-		logger.debug("PUSH " + reg);
+		var reg = registerOperandLeft(opCode);
+		logger.debug("PUSH " + registers.registerName(reg));
 	}
 
 	private void pop(int opCode) {
 		var reg = getRegister(opCode);
-		logger.debug("POP " + reg);
+		logger.debug("POP " + registers.registerName(reg));
 	}
 
-	private void move(int opCode) {
+	private void mov(int opCode) {
 		var b = nextU8();
-		var r1 = operandLeft(b);
-		var r2 = operandRight(b);
-		logger.debug(String.format("MOV %s, %s", r1, r2));
+		var r1 = registerOperandLeft(b);
+		var r2 = registerOperandRight(b);
+		logger.debug(String.format("MOV %s, %s", registers.registerName(r1), registers.registerName(r2)));
+		registers.set(r1, registers.get(r2));
 	}
 
 	private void nop() {
@@ -122,5 +114,7 @@ public class Disassembler {
 
 	private void ret() {
 		logger.debug("RET");
+		// TODO: change this behaviour
+		canContinue = false;
 	}
 }

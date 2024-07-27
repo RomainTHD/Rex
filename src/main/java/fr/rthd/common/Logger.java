@@ -1,14 +1,29 @@
 package fr.rthd.common;
 
 public class Logger {
-	private String _className;
+	public enum Level {
+		Debug,
+		Info,
+		Warn,
+		Error,
+	}
+
+	private final String _className;
+	private final Level _minLevel;
 
 	public Logger(Class<?> cls) {
-		_className = cls.getName();
+		this(cls, Level.Debug);
+	}
+
+	public Logger(Class<?> cls, Level minLevel) {
+		this._className = cls.getName();
+		this._minLevel = minLevel;
 	}
 
 	public void debug(String msg) {
-		System.out.println("[D] " + msg);
+		if (Level.Debug.ordinal() >= _minLevel.ordinal()) {
+			System.out.println("[D] " + msg);
+		}
 	}
 
 	public void log(String msg) {
