@@ -41,6 +41,7 @@
 ___main:
 	push	ebp	 #
 	mov	ebp, esp	 #,
-	mov	eax, 0	 # _1,
-	pop	ebp	 #
+	sub	esp, 16	 #,
+	mov	eax, DWORD PTR [ebp-4]	 # _2, x
+	leave
 	ret

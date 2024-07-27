@@ -26,6 +26,7 @@ public class Disassembler {
 			case 0x30, 0x31, 0x32, 0x33, 0x34, 0x35 -> xor();
 			case 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 -> push(opCode);
 			case 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f -> pop(opCode);
+			case 0x83 -> immediateGroup();
 			case 0x88, 0x89, 0x8c -> mov(false);
 			case 0x8a, 0x8b -> mov(true);
 			case 0x90 -> nop();
@@ -103,6 +104,26 @@ public class Disassembler {
 			virtualMemory.readU32At((int) registers.get(Registers.ESP))
 		);
 		registers.set(Registers.ESP, registers.get(Registers.ESP) + 4);
+	}
+
+	private void sub(int nextOp) {
+		var reg = registerOperandLeft(nextOp);
+		var val = nextU8();
+		logger.debug(String.format("SUB %s, %d", registers.getRegName(reg), val));
+		registers.set(reg, registers.get(reg) - val);
+	}
+
+	private void immediateGroup() {
+		var nextOp = nextU8();
+		var mod = registerOperandRight(nextOp);
+		switch (mod) {
+			case 5 -> sub(nextOp);
+			default -> throw FailureManager.fail(
+				Disassembler.class,
+				ExitCode.Unsupported,
+				"Modifier not known: " + mod
+			);
+		}
 	}
 
 	private void mov(boolean flipped) {

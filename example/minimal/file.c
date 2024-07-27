@@ -1,3 +1,4 @@
 int __main() {
-	return 0;
+	int x;
+	return x;
 }
