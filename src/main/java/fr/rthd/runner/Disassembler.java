@@ -3,6 +3,7 @@ package fr.rthd.runner;
 import fr.rthd.common.ExitCode;
 import fr.rthd.common.FailureManager;
 import fr.rthd.common.Logger;
+import fr.rthd.common.Pair;
 import fr.rthd.common.Utils;
 import fr.rthd.io.LittleEndianDataManager;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class Disassembler {
 			case 0x90 -> nop();
 			case 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf -> movLit(opCode);
 			case 0xc2, 0xc3 -> ret();
+			case 0xc9 -> leave();
 			default -> throw FailureManager.fail(
 				Disassembler.class,
 				ExitCode.InvalidState,
@@ -42,15 +44,34 @@ public class Disassembler {
 	}
 
 	private int getRegister(int value) {
-		return registers.intToReg(value);
+		if (value >= 0xc0) {
+			return registers.intToReg(value);
+		}
+
+		throw new IllegalArgumentException("Register value out of range: " + Utils.u8ToString(value));
 	}
 
-	private int registerOperandLeft(int value) {
-		return getRegister(value);
-	}
+	private Pair<RegisterOffset, RegisterOffset> getDoubleRegister(int value) {
+		if (value >= 0xc0) {
+			return new Pair<>(
+				new RegisterOffset(registers.intToReg(value), 0),
+				new RegisterOffset(registers.intToReg(value >> 3), 0)
+			);
+		}
 
-	private int registerOperandRight(int value) {
-		return getRegister(value >> 3);
+		if (value >= 0x80) {
+			throw FailureManager.fail(Disassembler.class, ExitCode.Unsupported, "32 bits offset not supported yet");
+		}
+
+		if (value >= 0x40) {
+			var offset = nextU8();
+			return new Pair<>(
+				new RegisterOffset(registers.intToReg(value), offset >= 128 ? offset - 256 : offset),
+				new RegisterOffset(registers.intToReg(value >> 3), 0)
+			);
+		}
+
+		throw new IllegalArgumentException("Register value out of range: " + Utils.u8ToString(value));
 	}
 
 	private void illegalOpCode(int opCode) {
@@ -83,17 +104,22 @@ public class Disassembler {
 
 	private void xor() {
 		var b = nextU8();
-		var r1 = registerOperandLeft(b);
-		var r2 = registerOperandRight(b);
-		logger.debug(String.format("XOR %s, %s", registers.getRegName(r1), registers.getRegName(r2)));
-		registers.set(r1, registers.get(r1) ^ registers.get(r2));
+		var reg = getDoubleRegister(b);
+		logger.debug(String.format(
+			"XOR %s, %s",
+			registers.getRegName(reg.getLeft().getRegister()),
+			registers.getRegName(reg.getRight().getRegister())
+		));
+		registers.set(
+			reg.getLeft().getRegister(),
+			registers.get(reg.getLeft().getRegister()) ^ registers.get(reg.getRight().getRegister())
+		);
 	}
 
 	private void push(int opCode) {
-		var reg = registerOperandLeft(opCode);
-		logger.debug("PUSH " + registers.getRegName(reg));
+		logger.debug("PUSH " + registers.getRegName(opCode));
 		registers.set(Registers.ESP, registers.get(Registers.ESP) - 4);
-		virtualMemory.writeU32((int) registers.get(Registers.ESP), registers.get(reg));
+		virtualMemory.writeU32((int) registers.get(Registers.ESP), registers.get(opCode));
 	}
 
 	private void pop(int opCode) {
@@ -107,7 +133,7 @@ public class Disassembler {
 	}
 
 	private void sub(int nextOp) {
-		var reg = registerOperandLeft(nextOp);
+		var reg = getRegister(nextOp);
 		var val = nextU8();
 		logger.debug(String.format("SUB %s, %d", registers.getRegName(reg), val));
 		registers.set(reg, registers.get(reg) - val);
@@ -115,7 +141,7 @@ public class Disassembler {
 
 	private void immediateGroup() {
 		var nextOp = nextU8();
-		var mod = registerOperandRight(nextOp);
+		var mod = (nextOp >> 3) % 0b1000;
 		switch (mod) {
 			case 5 -> sub(nextOp);
 			default -> throw FailureManager.fail(
@@ -128,15 +154,25 @@ public class Disassembler {
 
 	private void mov(boolean flipped) {
 		var b = nextU8();
-		var r1 = registerOperandLeft(b);
-		var r2 = registerOperandRight(b);
+		var reg =getDoubleRegister(b);
 		if (flipped) {
-			var tmp = r1;
-			r1 = r2;
-			r2 = tmp;
+			reg = new Pair<>(reg.getRight(), reg.getLeft());
 		}
-		logger.debug(String.format("MOV %s, %s", registers.getRegName(r1), registers.getRegName(r2)));
-		registers.set(r1, registers.get(r2));
+		var offset = reg.getRight().getOffset();
+		logger.debug(String.format(
+			"MOV %s, %s%s%s%s%s",
+			registers.getRegName(reg.getLeft().getRegister()),
+			offset == 0 ? "" : "[",
+			registers.getRegName(reg.getRight().getRegister()),
+			offset == 0 ? "" : offset > 0 ? " + " : " - ",
+			offset == 0 ? "" : Math.abs(offset),
+			offset == 0 ? "" : "]"
+		));
+		// TODO: should deref value
+		registers.set(
+			reg.getLeft().getRegister(),
+			registers.get(reg.getRight().getRegister())
+		);
 	}
 
 	private void nop() {
@@ -144,7 +180,7 @@ public class Disassembler {
 	}
 
 	private void movLit(int opCode) {
-		var r = registerOperandLeft(opCode);
+		var r = getRegister(opCode);
 		var lit = virtualMemory.readU32();
 		logger.debug(String.format("MOV %s, %d", registers.getRegName(r), lit));
 		registers.set(r, lit);
@@ -154,5 +190,17 @@ public class Disassembler {
 		logger.debug("RET");
 		// TODO: change this behaviour
 		canContinue = false;
+	}
+
+	/**
+	 * Synonym for
+	 * <br />
+	 * <code>
+	 * mov  esp, ebp <br />
+	 * pop  ebp
+	 * </code>
+	 */
+	private void leave() {
+		logger.debug("LEAVE");
 	}
 }

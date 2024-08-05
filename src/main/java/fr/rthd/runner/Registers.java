@@ -23,7 +23,7 @@ public class Registers {
 	}
 
 	public String getRegName(int value) {
-		return switch (value) {
+		return switch (value % 0b1000) {
 			case 0b000 -> "EAX";
 			case 0b001 -> "ECX";
 			case 0b010 -> "EDX";
